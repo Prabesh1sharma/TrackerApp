@@ -61,11 +61,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await dbConnect();
-
     // Normalize date to midnight UTC
     const normalizedDate = new Date(date);
     normalizedDate.setUTCHours(0, 0, 0, 0);
+
+    // Only allow logging for today and yesterday
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const diffDays = Math.round(
+      (today.getTime() - normalizedDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diffDays < 0 || diffDays > 1) {
+      return NextResponse.json(
+        { error: "You can only log activities for today or yesterday" },
+        { status: 400 }
+      );
+    }
+
+    // Yesterday only allows "excused" status
+    if (diffDays === 1 && status !== "excused") {
+      return NextResponse.json(
+        { error: "You can only add excuses for yesterday's activities" },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
 
     // Upsert: create or update the log for this activity on this date
     const log = await ActivityLog.findOneAndUpdate(

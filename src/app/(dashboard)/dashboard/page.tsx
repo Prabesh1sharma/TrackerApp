@@ -66,6 +66,9 @@ export default function DashboardPage() {
     const log = getLog(remarkModal);
     if (log) {
       await fetch(`/api/logs/${log._id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ remark }) });
+    } else if (isYesterday) {
+      toast.error("Add an excuse first before adding a remark");
+      setRemarkModal(null); setRemark(""); return;
     } else {
       await logAction(remarkModal, "completed", { remark });
     }
@@ -76,6 +79,8 @@ export default function DashboardPage() {
   const total = activities.length;
   const pct = total > 0 ? (completed / total) * 100 : 0;
   const isToday = date === format(new Date(), "yyyy-MM-dd");
+  const isYesterday = date === format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const canLog = isToday || isYesterday;
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
@@ -124,9 +129,15 @@ export default function DashboardPage() {
 
       {/* Activity Cards */}
       {!isToday && activities.length > 0 && (
-        <div style={{ padding: "10px 16px", marginBottom: "16px", backgroundColor: "rgba(91,143,185,0.1)", border: "1px solid rgba(91,143,185,0.2)", borderRadius: "12px", fontSize: "13px", color: "#5b8fb9", textAlign: "center" }}>
-          📅 Viewing {format(new Date(date + "T00:00:00"), "MMM d, yyyy")} — You can only log activities for today
-        </div>
+        isYesterday ? (
+          <div style={{ padding: "10px 16px", marginBottom: "16px", backgroundColor: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: "12px", fontSize: "13px", color: "#c9a84c", textAlign: "center" }}>
+            ⏰ Forgot to log yesterday? You can still save your streak by adding an excuse below!
+          </div>
+        ) : (
+          <div style={{ padding: "10px 16px", marginBottom: "16px", backgroundColor: "rgba(91,143,185,0.1)", border: "1px solid rgba(91,143,185,0.2)", borderRadius: "12px", fontSize: "13px", color: "#5b8fb9", textAlign: "center" }}>
+            📅 Viewing {format(new Date(date + "T00:00:00"), "MMM d, yyyy")} — You can only log activities for today or yesterday
+          </div>
+        )
       )}
 
       {activities.length === 0 ? (
@@ -156,7 +167,7 @@ export default function DashboardPage() {
                       {log?.reason && <span style={{ fontSize: "12px", color: "#c9a84c" }}>💬 {log.reason}</span>}
                     </div>
                   </div>
-                  {/* Actions — only enabled for today */}
+                  {/* Actions — enabled for today (all actions) and yesterday (excuse only) */}
                   {isToday ? (
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
                       {[
@@ -174,6 +185,21 @@ export default function DashboardPage() {
                         <HiOutlinePencilAlt style={{ width: "16px", height: "16px" }} />
                       </button>
                     </div>
+                  ) : isYesterday ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                      {st && st !== "excused" ? (
+                        <Badge color={st === "completed" ? "green" : "red"} size="sm">{st}</Badge>
+                      ) : (
+                        <>
+                          <button onClick={() => { setExcuseModal(a._id); setReason(log?.reason || ""); }} title="Save streak with excuse" style={{ width: "36px", height: "36px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer", transition: "all 0.2s", backgroundColor: st === "excused" ? "#c9a84c" : "rgba(201,168,76,0.15)", color: st === "excused" ? "white" : "#c9a84c" }}>
+                            <HiOutlineExclamation style={{ width: "16px", height: "16px" }} />
+                          </button>
+                          <button onClick={() => { setRemarkModal(a._id); setRemark(log?.remark || ""); }} title="Add remark" style={{ width: "36px", height: "36px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer", transition: "all 0.2s", backgroundColor: "#2e2b28", color: "#6b6560" }}>
+                            <HiOutlinePencilAlt style={{ width: "16px", height: "16px" }} />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   ) : (
                     <div style={{ fontSize: "12px", color: "#6b6560", flexShrink: 0 }}>
                       {st ? <Badge color={st === "completed" ? "green" : st === "excused" ? "amber" : "red"} size="sm">{st}</Badge> : <span style={{ opacity: 0.5 }}>No log</span>}
@@ -187,13 +213,23 @@ export default function DashboardPage() {
       )}
 
       {/* Excuse Modal */}
-      <Modal isOpen={!!excuseModal} onClose={() => setExcuseModal(null)} title="Can't complete today">
+      <Modal isOpen={!!excuseModal} onClose={() => setExcuseModal(null)} title={isYesterday ? "Save yesterday's streak" : "Can't complete today"}>
         <form onSubmit={handleExcuse} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <p style={{ fontSize: "14px", color: "#9c9490" }}>Provide a valid reason. Your streak will be preserved.</p>
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} required placeholder="Why can't you complete this today?" rows={3} style={inputStyle} />
+          <p style={{ fontSize: "14px", color: "#9c9490" }}>
+            {isYesterday
+              ? "Forgot to log yesterday? Add an excuse to preserve your streak. Be honest with yourself!"
+              : "Provide a valid reason. Your streak will be preserved."}
+          </p>
+          {isYesterday && (
+            <div style={{ padding: "8px 12px", backgroundColor: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: "8px", fontSize: "12px", color: "#c9a84c", display: "flex", alignItems: "center", gap: "6px" }}>
+              <HiOutlineFire style={{ width: "14px", height: "14px", flexShrink: 0 }} />
+              This will count as an excused day — your streak stays alive!
+            </div>
+          )}
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} required placeholder={isYesterday ? "Why didn't you complete this yesterday?" : "Why can't you complete this today?"} rows={3} style={inputStyle} />
           <div style={{ display: "flex", gap: "12px" }}>
             <Button type="button" variant="secondary" onClick={() => setExcuseModal(null)} style={{ flex: 1 }}>Cancel</Button>
-            <Button type="submit" variant="warning" style={{ flex: 1 }}>Submit Reason</Button>
+            <Button type="submit" variant="warning" style={{ flex: 1 }}>{isYesterday ? "Save Streak" : "Submit Reason"}</Button>
           </div>
         </form>
       </Modal>
